@@ -20,7 +20,7 @@ type Backend interface {
 }
 
 func Get(s string) (string, error) {
-	bolton := GetBoltInstance()
+	bolton := getBoltInstance()
 	var res string
 	//fmt.Println(uri)
 	berr := bolton.bdb.View(func(tx *bolt.Tx) error {
@@ -36,7 +36,7 @@ func Get(s string) (string, error) {
 }
 
 func Put(s pastedb.PasteRecord) error {
-	bolton := GetBoltInstance()
+	bolton := getBoltInstance()
 	berr := bolton.bdb.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
 		err := b.Put([]byte(s.Hash), []byte(s.Body))
@@ -67,6 +67,6 @@ func init() {
 	}
 }
 
-func GetBoltInstance() *Bolton {
+func getBoltInstance() *Bolton {
 	return singleton
 }

@@ -36,7 +36,7 @@ func init() {
 	//flag.StringVar(&backend, "db", "bolt", "backend options: bolt")
 }
 
-func RequestHandler(w http.ResponseWriter, r *http.Request) {
+func requestHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		postHandler(w, r)
@@ -111,7 +111,7 @@ func certsExist() bool {
 
 func main() {
 	mux := http.NewServeMux()
-	mux.Handle("/", http.HandlerFunc(RequestHandler))
+	mux.Handle("/", http.HandlerFunc(requestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
 	if certsExist() {
 		cfg := &tls.Config{

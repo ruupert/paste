@@ -15,10 +15,10 @@ type PasteRecord struct {
 
 func (c *PasteRecord) New(body string) {
 	c.Body = body
-	c.Hash = c.Digest(body)
+	c.Hash = c.digest(body)
 }
 
-func (c *PasteRecord) Digest(body string) string {
+func (c *PasteRecord) digest(body string) string {
 	hh := hash.New32a()
 	hh.Write([]byte(body))
 	enc := b64.URLEncoding.Strict().EncodeToString(hh.Sum(nil))
