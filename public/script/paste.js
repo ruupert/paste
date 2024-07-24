@@ -1,5 +1,4 @@
 (function () {
-
     $(document).bind('keydown', function (e) {
         var paste;
         if (e.keyCode === 83 && e.ctrlKey) {
@@ -15,9 +14,7 @@
             });
         }
     });
-
     $(document).ready(function () {
         return $('#paste').focus();
     });
-
 }).call(this);

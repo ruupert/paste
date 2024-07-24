@@ -8,7 +8,6 @@ import (
 
 const Size = 5
 
-
 type PasteRecord struct {
 	Hash string `db:"hash"`
 	Body string `db:"body"`

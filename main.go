@@ -71,15 +71,12 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError)
 		}
-
 		wd, err := os.Getwd()
 		if err != nil {
 			log.Fatal(err)
 		}
 		w.Header().Set("Cache-Control", "no-cache")
-
 		pagedata := BodyData{Value: "<pre><code>" + res + "</code></pre>"}
-
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 		tmpl.Execute(w, pagedata)
 	}
@@ -91,9 +88,7 @@ func getIndexHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	w.Header().Set("Cache-Control", "no-cache")
-
 	pagedata := BodyData{Value: "<textarea class='prettyprint' id='paste' placeholder='[ paste text  -  ctrl+s to save ]' spellcheck='false'></textarea>"}
-
 	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 	tmpl.Execute(w, pagedata)
 }
@@ -118,7 +113,6 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(RequestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
-
 	if certsExist() {
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS12,

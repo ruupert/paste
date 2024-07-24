@@ -47,7 +47,6 @@ func Put(s pastedb.PasteRecord) error {
 		return berr
 	}
 	return nil
-
 }
 
 func init() {
