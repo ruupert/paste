@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	pastedb "github.com/ruupert/paste/db"
 )
@@ -114,6 +115,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func notFoundHandler(w http.ResponseWriter) {
+	fmt.Println("Entered notfoundhandler")
 	// read these later once at init
 	files, err := os.ReadDir(goPaste404Dir)
 	if err != nil {
@@ -124,7 +126,7 @@ func notFoundHandler(w http.ResponseWriter) {
 		log.Fatal(err)
 	}
 	w.Header().Set("Cache-Control", "no-cache")
-	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"}
+	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"} // #nosec G404
 	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 	err = tmpl.Execute(w, pagedata)
 	if err != nil {
@@ -177,7 +179,6 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
-	fmt.Println(goPasteDb)
 	d, err := pastedb.NewDatabaseType(pastedb.DatabaseType(getDBType(goPasteDb)))
 	if err != nil {
 		log.Fatal(err)
@@ -190,23 +191,22 @@ func main() {
 			PreferServerCipherSuites: true,
 			CipherSuites: []uint16{
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 			},
 		}
 		srv := &http.Server{
-			Addr:         fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
-			Handler:      mux,
-			TLSConfig:    cfg,
-			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
+			Handler:           mux,
+			TLSConfig:         cfg,
+			ReadHeaderTimeout: 10 * time.Second,
+			TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 		}
 		fmt.Printf("Listening https on %d with %s store backend\n", goPastePort, db.GetName())
 		log.Fatal(srv.ListenAndServeTLS(goPasteTlsCrt, goPasteTlsKey))
 	} else {
 		srv := &http.Server{
-			Addr:    fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
-			Handler: mux,
+			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
+			ReadHeaderTimeout: 10 * time.Second,
+			Handler:           mux,
 		}
 		fmt.Printf("Listening http on %d with %s store backend\n", goPastePort, db.GetName())
 		log.Fatal(srv.ListenAndServe())

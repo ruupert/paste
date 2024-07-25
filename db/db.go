@@ -33,28 +33,33 @@ type BoltDatabase struct {
 	conn *bolt.DB
 }
 
+var ErrHashNotFound = errors.New("hash not found")
+
 func (b *BoltDatabase) Get(h string) (string, error) {
 	var res string
-	berr := b.conn.View(func(tx *bolt.Tx) error {
+	err := b.conn.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
 		v := b.Get([]byte(h))
 		res = string(v)
 		return nil
 	})
-	if berr != nil {
-		return "", berr
+	if err != nil {
+		return "", err
+	}
+	if res == "" {
+		return "", ErrHashNotFound
 	}
 	return res, nil
 }
+
 func (b *BoltDatabase) Put(p PasteRecord) (string, error) {
-	berr := b.conn.Update(func(tx *bolt.Tx) error {
+	err := b.conn.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
 		err := b.Put([]byte(p.Hash), []byte(p.Body))
 		return err
 	})
-	if berr != nil {
-		fmt.Println(berr)
-		return "", berr
+	if err != nil {
+		return "", err
 	}
 	return p.Hash, nil
 
@@ -69,8 +74,6 @@ type MemoryDatabase struct {
 	sync.RWMutex
 	Pastes []PasteRecord
 }
-
-var ErrHashNotFound = errors.New("hash not found")
 
 func (b *MemoryDatabase) Get(h string) (string, error) {
 	if len(b.Pastes) == 0 {
@@ -110,13 +113,16 @@ func NewDatabaseType(dbType DatabaseType) (DatabaseInterface, error) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		mbdb.Update(func(tx *bolt.Tx) error {
+		err = mbdb.Update(func(tx *bolt.Tx) error {
 			_, err := tx.CreateBucket([]byte("paste"))
 			if err != nil {
 				return fmt.Errorf("create bucket: %s", err)
 			}
 			return nil
 		})
+		if err != nil {
+			log.Fatal(err)
+		}
 		return &BoltDatabase{name: "Bolt", conn: mbdb}, nil
 	case MemoryDatabaseType:
 		return &MemoryDatabase{name: "Memory"}, nil
@@ -137,7 +143,10 @@ func (c *PasteRecord) New(body string) {
 
 func (c *PasteRecord) digest(body string) string {
 	hh := hash.New32a()
-	hh.Write([]byte(body))
+	_, err := hh.Write([]byte(body))
+	if err != nil {
+		fmt.Println(err)
+	}
 	enc := b64.URLEncoding.Strict().EncodeToString(hh.Sum(nil))
 	return strings.TrimSuffix(enc, "==")
 }

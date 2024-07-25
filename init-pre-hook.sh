@@ -11,8 +11,13 @@ if [ "$?" -eq 1 ]; then
 echo "install golangci-lint into PATHs"
 exit 0
 fi
+gosec_bin=$( which gosec)
+if [ "$?" -eq 1 ]; then
+echo "install gosec into PATHs"
+exit 0
+fi
 pre_script="#!/usr/bin/env bash
-$osv_scanner . && golangci-lint run .
+$osv_scanner . && $golangci_lint run . && $gosec_bin -r
 exit \$?"
 echo "$pre_script" > "$hook_dir/$hook_name"
 chmod u+x "$hook_dir/$hook_name"
