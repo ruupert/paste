@@ -61,7 +61,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 
 func getHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
-		getIndexHandler(w, r)
+		getIndexHandler(w)
 	} else {
 		req, found := strings.CutPrefix(r.URL.Path, "/")
 		if !found {
@@ -82,7 +82,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getIndexHandler(w http.ResponseWriter, r *http.Request) {
+func getIndexHandler(w http.ResponseWriter) {
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
