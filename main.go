@@ -8,6 +8,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -27,6 +28,7 @@ var (
 	goPasteTlsCrt string
 	goPasteTlsKey string
 	goPasteDb     string
+	goPaste404Dir string
 )
 
 func init() {
@@ -35,6 +37,7 @@ func init() {
 	flag.StringVar(&goPasteTlsCrt, "cert", "tls.pem", "Cert")
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
 	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
+	flag.StringVar(&goPaste404Dir, "404", "./public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
 	flag.Parse()
 }
 
@@ -79,11 +82,13 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	req, found := strings.CutPrefix(r.URL.Path, "/")
 	if !found {
-		http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
+		notFoundHandler(w)
+		return
 	}
 	res, err := db.Get(req)
 	if err != nil {
-		http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
+		notFoundHandler(w)
+		return
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -97,6 +102,23 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 		tmpl.Execute(w, pagedata)
 	}
+}
+
+func notFoundHandler(w http.ResponseWriter) {
+	// read these later once at init
+	files, err := os.ReadDir(goPaste404Dir)
+	if err != nil {
+		fmt.Println(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w.Header().Set("Cache-Control", "no-cache")
+	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"}
+	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
+	tmpl.Execute(w, pagedata)
 }
 
 func getIndexHandler(w http.ResponseWriter) {
