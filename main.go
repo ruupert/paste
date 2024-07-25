@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"text/template"
 	"time"
@@ -177,6 +178,8 @@ func getDBType(s string) int {
 }
 
 func initPyroscope(addr string) {
+	runtime.SetMutexProfileFraction(5)
+	runtime.SetBlockProfileRate(5)
 	_, err := pyroscope.Start(pyroscope.Config{
 		ApplicationName: "github.com.ruupert.paste",
 		ServerAddress:   addr,
@@ -187,6 +190,11 @@ func initPyroscope(addr string) {
 			pyroscope.ProfileAllocSpace,
 			pyroscope.ProfileInuseObjects,
 			pyroscope.ProfileInuseSpace,
+			pyroscope.ProfileGoroutines,
+			pyroscope.ProfileMutexCount,
+			pyroscope.ProfileMutexDuration,
+			pyroscope.ProfileBlockCount,
+			pyroscope.ProfileBlockDuration,
 		},
 	})
 	if err != nil {
