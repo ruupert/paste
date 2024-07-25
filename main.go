@@ -26,7 +26,7 @@ var (
 	goPasteAddr   string
 	goPasteTlsCrt string
 	goPasteTlsKey string
-	//backend       string
+	goPasteDb     string
 )
 
 func init() {
@@ -34,7 +34,8 @@ func init() {
 	flag.StringVar(&goPasteAddr, "addr", "0.0.0.0", "Bind address")
 	flag.StringVar(&goPasteTlsCrt, "cert", "tls.pem", "Cert")
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
-	//flag.StringVar(&backend, "db", "bolt", "backend options: bolt")
+	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
+	flag.Parse()
 }
 
 func requestHandler(w http.ResponseWriter, r *http.Request) {
@@ -66,11 +67,11 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		req, found := strings.CutPrefix(r.URL.Path, "/")
 		if !found {
-			http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError)
+			http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
 		}
 		res, err := db.Get(req)
 		if err != nil {
-			http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError)
+			http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError)  // 4xx-5xxhandle here
 		}
 		wd, err := os.Getwd()
 		if err != nil {
@@ -110,11 +111,23 @@ func certsExist() bool {
 	}
 }
 
+func getDBType(s string) int {
+	switch s {
+	case "bolt":
+		return 0
+	case "memory":
+		return 1
+	default:
+		return 0
+	}
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
-	d, err := pastedb.NewDatabaseType(pastedb.BoltDatabaseType)
+	fmt.Println(goPasteDb)
+	d, err := pastedb.NewDatabaseType(pastedb.DatabaseType(getDBType(goPasteDb)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -138,14 +151,14 @@ func main() {
 			TLSConfig:    cfg,
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 		}
-		fmt.Printf("Listening https on %d\n", goPastePort)
+		fmt.Printf("Listening https on %d with %s store backend\n", goPastePort, db.GetName())
 		log.Fatal(srv.ListenAndServeTLS(goPasteTlsCrt, goPasteTlsKey))
 	} else {
 		srv := &http.Server{
 			Addr:    fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
 			Handler: mux,
 		}
-		fmt.Printf("Listening http on %d\n", goPastePort)
+		fmt.Printf("Listening http on %d with %s store backend\n", goPastePort, db.GetName())
 		log.Fatal(srv.ListenAndServe())
 	}
 }
