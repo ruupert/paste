@@ -51,6 +51,7 @@ func requestHandler(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		postHandler(w, r)
 	case "GET":
+		w.Header().Set("Connection", "close")
 		getHandler(w, r)
 	default:
 		http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
@@ -216,19 +217,21 @@ func main() {
 	db = d
 	if certsExist() {
 		cfg := &tls.Config{
-			MinVersion:               tls.VersionTLS12,
-			CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+			MinVersion:               tls.VersionTLS13,
+			CurvePreferences:         []tls.CurveID{tls.X25519, tls.CurveP256},
 			PreferServerCipherSuites: true,
 			CipherSuites: []uint16{
+				tls.TLS_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_CHACHA20_POLY1305_SHA256,
 			},
 		}
 		srv := &http.Server{
 			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
 			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       10 * time.Second,
-			WriteTimeout:      10 * time.Second,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      5 * time.Second,
 			MaxHeaderBytes:    8192,
 			TLSConfig:         cfg,
 			TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
@@ -240,8 +243,8 @@ func main() {
 			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
 			Handler:           mux,
 			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       10 * time.Second,
-			WriteTimeout:      10 * time.Second,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      5 * time.Second,
 			MaxHeaderBytes:    8192,
 		}
 		fmt.Printf("Listening http on %d with %s store backend\n", goPastePort, db.GetName())
