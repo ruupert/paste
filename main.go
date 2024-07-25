@@ -115,7 +115,6 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func notFoundHandler(w http.ResponseWriter) {
-	fmt.Println("Entered notfoundhandler")
 	// read these later once at init
 	files, err := os.ReadDir(goPaste404Dir)
 	if err != nil {
@@ -196,8 +195,11 @@ func main() {
 		srv := &http.Server{
 			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
 			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			MaxHeaderBytes:    8192,
 			TLSConfig:         cfg,
-			ReadHeaderTimeout: 10 * time.Second,
 			TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 		}
 		fmt.Printf("Listening https on %d with %s store backend\n", goPastePort, db.GetName())
@@ -205,8 +207,11 @@ func main() {
 	} else {
 		srv := &http.Server{
 			Addr:              fmt.Sprintf("%s:%d", goPasteAddr, goPastePort),
-			ReadHeaderTimeout: 10 * time.Second,
 			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			MaxHeaderBytes:    8192,
 		}
 		fmt.Printf("Listening http on %d with %s store backend\n", goPastePort, db.GetName())
 		log.Fatal(srv.ListenAndServe())
