@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -13,13 +14,13 @@ import (
 	"text/template"
 
 	pastedb "github.com/ruupert/paste/db"
-	bolt "github.com/ruupert/paste/db/bolt"
 )
 
 type BodyData struct {
 	Value string
 }
 
+var db pastedb.DatabaseInterface
 var (
 	goPastePort   int
 	goPasteAddr   string
@@ -55,7 +56,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	var p pastedb.PasteRecord
 	p.New(string(body))
 	fmt.Println(p.Hash)
-	bolt.Put(p)
+	db.Put(p)
 	http.Redirect(w, r, "/"+p.Hash, http.StatusFound)
 }
 
@@ -67,7 +68,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError)
 		}
-		res, err := bolt.Get(req)
+		res, err := db.Get(req)
 		if err != nil {
 			http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError)
 		}
@@ -76,7 +77,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 			log.Fatal(err)
 		}
 		w.Header().Set("Cache-Control", "no-cache")
-		pagedata := BodyData{Value: "<pre><code>" + res + "</code></pre>"}
+		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(res) + "</code></pre>"}
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 		tmpl.Execute(w, pagedata)
 	}
@@ -113,6 +114,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
+	d, err := pastedb.NewDatabaseType(pastedb.BoltDatabaseType)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db = d
+
 	if certsExist() {
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS12,
