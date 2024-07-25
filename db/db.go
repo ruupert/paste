@@ -1,6 +1,7 @@
 package pastedb
 
 import (
+	"bytes"
 	b64 "encoding/base64"
 	"errors"
 	"fmt"
@@ -22,8 +23,8 @@ const (
 )
 
 type DatabaseInterface interface {
-	Get(h string) (string, error)
-	Put(p PasteRecord) (string, error)
+	Get(h []byte) ([]byte, error)
+	Put(p PasteRecord) ([]byte, error)
 	GetName() string
 }
 
@@ -35,31 +36,31 @@ type BoltDatabase struct {
 
 var ErrHashNotFound = errors.New("hash not found")
 
-func (b *BoltDatabase) Get(h string) (string, error) {
-	var res string
+func (b *BoltDatabase) Get(h []byte) ([]byte, error) {
+	var res []byte
 	err := b.conn.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
-		v := b.Get([]byte(h))
-		res = string(v)
+		v := b.Get(h)
+		res = v
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return []byte(""), err
 	}
-	if res == "" {
-		return "", ErrHashNotFound
+	if bytes.Equal(res, []byte("")) {
+		return []byte(""), ErrHashNotFound
 	}
-	return res, nil
+	return []byte(res), nil
 }
 
-func (b *BoltDatabase) Put(p PasteRecord) (string, error) {
+func (b *BoltDatabase) Put(p PasteRecord) ([]byte, error) {
 	err := b.conn.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
 		err := b.Put([]byte(p.Hash), []byte(p.Body))
 		return err
 	})
 	if err != nil {
-		return "", err
+		return []byte(""), err
 	}
 	return p.Hash, nil
 
@@ -75,19 +76,19 @@ type MemoryDatabase struct {
 	Pastes []PasteRecord
 }
 
-func (b *MemoryDatabase) Get(h string) (string, error) {
+func (b *MemoryDatabase) Get(h []byte) ([]byte, error) {
 	if len(b.Pastes) == 0 {
-		return "", ErrHashNotFound
+		return []byte(""), ErrHashNotFound
 	}
 	for _, v := range b.Pastes {
-		if h == v.Hash {
+		if bytes.Equal(h, v.Hash) {
 			return v.Body, nil
 		}
 	}
-	return "", ErrHashNotFound
+	return []byte(""), ErrHashNotFound
 }
 
-func (b *MemoryDatabase) Put(p PasteRecord) (string, error) {
+func (b *MemoryDatabase) Put(p PasteRecord) ([]byte, error) {
 	b.RWMutex.Lock()
 	defer b.RWMutex.Unlock()
 	if len(b.Pastes) == 0 {
@@ -95,7 +96,7 @@ func (b *MemoryDatabase) Put(p PasteRecord) (string, error) {
 		return p.Hash, nil
 	}
 	for _, v := range b.Pastes {
-		if v.Hash == p.Hash {
+		if bytes.Equal(v.Hash, p.Hash) {
 			return v.Hash, nil
 		}
 	}
@@ -135,21 +136,21 @@ func NewDatabaseType(dbType DatabaseType) (DatabaseInterface, error) {
 }
 
 type PasteRecord struct {
-	Hash string `db:"hash"`
-	Body string `db:"body"`
+	Hash []byte `db:"hash"`
+	Body []byte `db:"body"`
 }
 
-func (c *PasteRecord) New(body string) {
+func (c *PasteRecord) New(body []byte) {
 	c.Body = body
 	c.Hash = c.digest(body)
 }
 
-func (c *PasteRecord) digest(body string) string {
+func (c *PasteRecord) digest(body []byte) []byte {
 	hh := hash.New32a()
-	_, err := hh.Write([]byte(body))
+	_, err := hh.Write(body)
 	if err != nil {
 		fmt.Println(err)
 	}
 	enc := b64.URLEncoding.Strict().EncodeToString(hh.Sum(nil))
-	return strings.TrimSuffix(enc, "==")
+	return []byte(strings.TrimSuffix(enc, "=="))
 }

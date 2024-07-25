@@ -59,13 +59,12 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error", http.StatusInternalServerError)
 	}
 	var p pastedb.PasteRecord
-	p.New(string(body))
-	fmt.Println(p.Hash)
+	p.New(body)
 	_, err = db.Put(p)
 	if err != nil {
 		fmt.Println(err)
 	}
-	http.Redirect(w, r, "/"+p.Hash, http.StatusFound)
+	http.Redirect(w, r, "/"+string(p.Hash), http.StatusFound)
 }
 
 func textOnly(a string) bool {
@@ -89,7 +88,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		notFoundHandler(w)
 		return
 	}
-	res, err := db.Get(req)
+	res, err := db.Get([]byte(req))
 	if err != nil {
 		notFoundHandler(w)
 		return
@@ -99,13 +98,13 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	if textOnly(r.UserAgent()) {
-		_, err = w.Write([]byte(res))
+		_, err = w.Write(res)
 		if err != nil {
 			fmt.Println(err)
 		}
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
-		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(res) + "</code></pre>"}
+		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(string(res)) + "</code></pre>"}
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 		err = tmpl.Execute(w, pagedata)
 		if err != nil {
