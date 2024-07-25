@@ -116,7 +116,10 @@ func NewDatabaseType(dbType DatabaseType) (DatabaseInterface, error) {
 		err = mbdb.Update(func(tx *bolt.Tx) error {
 			_, err := tx.CreateBucket([]byte("paste"))
 			if err != nil {
-				return fmt.Errorf("create bucket: %s", err)
+				if err != bolt.ErrBucketExists {
+					log.Fatal(err)
+					return fmt.Errorf("create bucket: %s", err)
+				}
 			}
 			return nil
 		})
