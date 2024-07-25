@@ -61,22 +61,37 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/"+p.Hash, http.StatusFound)
 }
 
+func textOnly(a string) bool {
+	s := strings.ToLower(a)
+	r := []string{"curl", "wget", "fetch"}
+	for _, v := range r {
+		if strings.Contains(s, v) {
+			return true
+		}
+	}
+	return false
+}
+
 func getHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		getIndexHandler(w)
+		return
+	}
+	req, found := strings.CutPrefix(r.URL.Path, "/")
+	if !found {
+		http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
+	}
+	res, err := db.Get(req)
+	if err != nil {
+		http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if textOnly(r.UserAgent()) {
+		w.Write([]byte(res))
 	} else {
-		req, found := strings.CutPrefix(r.URL.Path, "/")
-		if !found {
-			http.Error(w, "ErrorPrefixNotFound", http.StatusInternalServerError) // 4xx-5xxhandle here
-		}
-		res, err := db.Get(req)
-		if err != nil {
-			http.Error(w, "ErrorHashNotFound", http.StatusInternalServerError)  // 4xx-5xxhandle here
-		}
-		wd, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
 		w.Header().Set("Cache-Control", "no-cache")
 		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(res) + "</code></pre>"}
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
