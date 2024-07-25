@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/grafana/pyroscope-go"
 	pastedb "github.com/ruupert/paste/db"
 )
 
@@ -24,12 +25,13 @@ type BodyData struct {
 
 var db pastedb.DatabaseInterface
 var (
-	goPastePort   int
-	goPasteAddr   string
-	goPasteTlsCrt string
-	goPasteTlsKey string
-	goPasteDb     string
-	goPaste404Dir string
+	goPastePort      int
+	goPasteAddr      string
+	goPasteTlsCrt    string
+	goPasteTlsKey    string
+	goPasteDb        string
+	goPaste404Dir    string
+	goPastePyroscope string
 )
 
 func init() {
@@ -39,6 +41,7 @@ func init() {
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
 	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
 	flag.StringVar(&goPaste404Dir, "404", "./public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
+	flag.StringVar(&goPastePyroscope, "pyroscope", "", "Pyroscope ServerAddress")
 	flag.Parse()
 }
 
@@ -173,7 +176,28 @@ func getDBType(s string) int {
 	}
 }
 
+func initPyroscope(addr string) {
+	_, err := pyroscope.Start(pyroscope.Config{
+		ApplicationName: "github.com.ruupert.paste",
+		ServerAddress:   addr,
+		Logger:          pyroscope.StandardLogger,
+		ProfileTypes: []pyroscope.ProfileType{
+			pyroscope.ProfileCPU,
+			pyroscope.ProfileAllocObjects,
+			pyroscope.ProfileAllocSpace,
+			pyroscope.ProfileInuseObjects,
+			pyroscope.ProfileInuseSpace,
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
+	if goPastePyroscope != "" {
+		initPyroscope(goPastePyroscope)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
