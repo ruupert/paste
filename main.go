@@ -60,7 +60,10 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	var p pastedb.PasteRecord
 	p.New(string(body))
 	fmt.Println(p.Hash)
-	db.Put(p)
+	_, err = db.Put(p)
+	if err != nil {
+		fmt.Println(err)
+	}
 	http.Redirect(w, r, "/"+p.Hash, http.StatusFound)
 }
 
@@ -95,12 +98,18 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	if textOnly(r.UserAgent()) {
-		w.Write([]byte(res))
+		_, err = w.Write([]byte(res))
+		if err != nil {
+			fmt.Println(err)
+		}
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(res) + "</code></pre>"}
 		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-		tmpl.Execute(w, pagedata)
+		err = tmpl.Execute(w, pagedata)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 
@@ -114,11 +123,13 @@ func notFoundHandler(w http.ResponseWriter) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	w.Header().Set("Cache-Control", "no-cache")
 	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"}
 	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-	tmpl.Execute(w, pagedata)
+	err = tmpl.Execute(w, pagedata)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func getIndexHandler(w http.ResponseWriter) {
@@ -129,7 +140,10 @@ func getIndexHandler(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-cache")
 	pagedata := BodyData{Value: "<textarea class='prettyprint' id='paste' placeholder='[ paste text  -  ctrl+s to save ]' spellcheck='false'></textarea>"}
 	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-	tmpl.Execute(w, pagedata)
+	err = tmpl.Execute(w, pagedata)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func certsExist() bool {
@@ -169,7 +183,6 @@ func main() {
 		log.Fatal(err)
 	}
 	db = d
-
 	if certsExist() {
 		cfg := &tls.Config{
 			MinVersion:               tls.VersionTLS12,
