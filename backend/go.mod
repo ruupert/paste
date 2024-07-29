@@ -1,4 +1,4 @@
-module github.com/ruupert/paste
+module github.com/ruupert/paste/backend
 
 go 1.22.5
 

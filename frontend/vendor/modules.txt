@@ -1,0 +1,5 @@
+# github.com/hexops/vecty v0.6.0
+## explicit; go 1.14
+github.com/hexops/vecty
+github.com/hexops/vecty/elem
+github.com/hexops/vecty/event

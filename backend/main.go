@@ -16,16 +16,18 @@ import (
 	"text/template"
 	"time"
 
+	"embed"
+
 	"github.com/grafana/pyroscope-go"
-	pastedb "github.com/ruupert/paste/db"
+	pastedb "github.com/ruupert/paste/backend/db"
 )
 
 type BodyData struct {
 	Value string
 }
 
-var db pastedb.DatabaseInterface
 var (
+	db               pastedb.DatabaseInterface
 	goPastePort      int
 	goPasteAddr      string
 	goPasteTlsCrt    string
@@ -35,23 +37,29 @@ var (
 	goPastePyroscope string
 )
 
+//go:embed public/out.wasm
+//go:embed public/script/wasm_exec.js
+//go:embed public/css/paste.css
+var embedded embed.FS
+
 func init() {
 	flag.IntVar(&goPastePort, "port", 8432, "Listen port")
 	flag.StringVar(&goPasteAddr, "addr", "0.0.0.0", "Bind address")
 	flag.StringVar(&goPasteTlsCrt, "cert", "tls.pem", "Cert")
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
 	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
-	flag.StringVar(&goPaste404Dir, "404", "./public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
+	flag.StringVar(&goPaste404Dir, "404", "./backend/public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
 	flag.StringVar(&goPastePyroscope, "pyroscope", "", "Pyroscope ServerAddress")
 	flag.Parse()
 }
 
 func requestHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Connection", "close")
 	switch r.Method {
 	case "POST":
+		fmt.Println("Post")
 		postHandler(w, r)
 	case "GET":
-		w.Header().Set("Connection", "close")
 		getHandler(w, r)
 	default:
 		http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
@@ -69,7 +77,14 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	http.Redirect(w, r, "/"+string(p.Hash), http.StatusFound)
+	w.Header().Add("Location", "/"+string(p.Hash))
+	w.WriteHeader(http.StatusCreated)
+	_, err = w.Write([]byte("ok"))
+	if err != nil {
+		fmt.Println(err)
+	}
+	//http.Redirect(w, r, "/"+string(p.Hash), http.StatusCreated)
+
 }
 
 func textOnly(a string) bool {
@@ -86,6 +101,35 @@ func textOnly(a string) bool {
 func getHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		getIndexHandler(w)
+		return
+	}
+	if r.URL.Path == "/wf" {
+		wd, err := os.Getwd()
+		if err != nil {
+			log.Fatal(err)
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		pagedata := BodyData{Value: ""}
+		tmpl := template.Must(template.ParseFiles(wd + "/backend/templates/wlayout.html"))
+		err = tmpl.Execute(w, pagedata)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+	if r.URL.Path == "/wasssm" {
+		w.Header().Set("Content-Type", "application/wasm")
+		http.ServeFileFS(w, r, embedded, "public/out.wasm")
+		return
+	}
+	if r.URL.Path == "/css" {
+		w.Header().Set("Content-Type", "text/css")
+		http.ServeFileFS(w, r, embedded, "public/css/paste.css")
+		return
+	}
+	if r.URL.Path == "/wasmexec" {
+		w.Header().Set("Content-Type", "application/javascript")
+		http.ServeFileFS(w, r, embedded, "public/script/wasm_exec.js")
 		return
 	}
 	req, found := strings.CutPrefix(r.URL.Path, "/")
@@ -110,7 +154,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(string(res)) + "</code></pre>"}
-		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
+		tmpl := template.Must(template.ParseFiles(wd + "/backend/templates/layout.html"))
 		err = tmpl.Execute(w, pagedata)
 		if err != nil {
 			fmt.Println(err)
@@ -130,7 +174,7 @@ func notFoundHandler(w http.ResponseWriter) {
 	}
 	w.Header().Set("Cache-Control", "no-cache")
 	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"} // #nosec G404
-	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
+	tmpl := template.Must(template.ParseFiles(wd + "/backend/templates/layout.html"))
 	err = tmpl.Execute(w, pagedata)
 	if err != nil {
 		fmt.Println(err)
@@ -144,7 +188,7 @@ func getIndexHandler(w http.ResponseWriter) {
 	}
 	w.Header().Set("Cache-Control", "no-cache")
 	pagedata := BodyData{Value: "<textarea class='prettyprint' id='paste' placeholder='[ paste text  -  ctrl+s to save ]' spellcheck='false'></textarea>"}
-	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
+	tmpl := template.Must(template.ParseFiles(wd + "/backend/templates/layout.html"))
 	err = tmpl.Execute(w, pagedata)
 	if err != nil {
 		fmt.Println(err)
@@ -209,7 +253,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
-	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
+	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./backend/public"))))
 	d, err := pastedb.NewDatabaseType(pastedb.DatabaseType(getDBType(goPasteDb)))
 	if err != nil {
 		log.Fatal(err)
