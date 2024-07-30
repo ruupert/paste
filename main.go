@@ -124,7 +124,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/404" {
 		w.Header().Set("Content-Type", "image/png")
-		http.ServeFileFS(w, r, embedded, "assets/script/wasm_exec.js")
+		http.ServeFileFS(w, r, embedded, "assets/404/404_1.png")
 		return
 	}
 	req, found := strings.CutPrefix(r.URL.Path, "/")
