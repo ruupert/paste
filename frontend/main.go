@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/hexops/vecty"
@@ -35,9 +34,12 @@ func main() {
 
 type PageView struct {
 	vecty.Core
-	Input      string
-	MetaToggle bool
-	sync.RWMutex
+	Input string
+}
+
+func (p *PageView) SetPath(path string) {
+
+	p.Render()
 }
 
 func (p *PageView) Render() vecty.ComponentOrHTML {
@@ -59,50 +61,37 @@ func (p *PageView) Render() vecty.ComponentOrHTML {
 				p.Input = e.Value.String()
 			}),
 			event.KeyUp(func(e *vecty.Event) {
-				p.RWMutex.Lock()
-				defer p.RWMutex.Unlock()
 				fmt.Println("KeyUp")
-				p.MetaToggle = false
 			}).StopPropagation(),
 			event.KeyDown(func(e *vecty.Event) {
-				p.RWMutex.Lock()
-				defer p.RWMutex.Unlock()
+				ctrlDown := e.Get("ctrlKey").Bool()
+				metaDown := e.Get("metaKey").Bool()
 				fmt.Println("KeyDown")
-				k := e.Value.Get("key").String()
 				fmt.Println(e.Value.Get("key"))
-				if p.MetaToggle {
-					switch k {
-					case "s":
-						fmt.Println("Input: " + p.Input)
-						fmt.Println("Meta+" + e.Value.Get("key").String())
-						go func() {
-							ctx := context.Background()
-							req, err := http.NewRequestWithContext(ctx, "POST", "//", bytes.NewReader([]byte(p.Input)))
-							if err != nil {
-								fmt.Println("err")
-								return
-							}
-							req = req.WithContext(ctx)
-							resp, err := http.DefaultClient.Do(req)
-							if err != nil {
-								fmt.Println("Error do req")
-								return
-							}
-							fmt.Println(resp.Header.Get("Location"))
-						}()
-					case "w":
-						fmt.Println("Meta+" + e.Value.Get("key").String())
-					case "v":
-						// slurp clipboard here I guess
-						fmt.Println("Meta+" + e.Value.Get("key").String())
-					case "r":
-						fmt.Println("Meta+" + e.Value.Get("key").String())
-						fmt.Println("Reloaded")
+				fmt.Println(p.Input)
+				switch e.Get("keyCode").Int() {
+				case 83: // S
+					if ctrlDown || metaDown {
+						e.Call("preventDefault")
+						if p.Input != "" {
+							go func() {
+								ctx := context.Background()
+								req, err := http.NewRequestWithContext(ctx, "POST", "//", bytes.NewReader([]byte(p.Input)))
+								if err != nil {
+									fmt.Println("err")
+									return
+								}
+								req = req.WithContext(ctx)
+								resp, err := http.DefaultClient.Do(req)
+								if err != nil {
+									fmt.Println("Error do req")
+									return
+								}
+								fmt.Println(resp.Header.Get("Location"))
+								p.SetPath(resp.Header.Get("Location"))
+							}()
+						}
 					}
-				}
-				if k == "Meta" {
-					fmt.Println("Meta toggled")
-					p.MetaToggle = true
 				}
 			}).StopPropagation(),
 		),

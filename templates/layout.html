@@ -2,16 +2,16 @@
 <html>
 
 <head>
-    <title>pastebin</title>
+    <title>wpastebin</title>
     <meta charset="utf-8"/>
-    <link rel="stylesheet" href="/public/highlight/styles/base16/solarized-dark.css">
     <link href="/css" rel="stylesheet" type="text/css" />
-    <script src="/public/highlight/highlight.min.js"></script>
-    <script src="/public/script/highlightjs-line-numbers.min.js"></script>
-    <script>hljs.highlightAll();</script>
-    <script>hljs.initLineNumbersOnLoad();</script>
-    <script src="//code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="/public/script/paste.js"></script>
+    <script src="/wasmexec"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("/wasssm"), go.importObject).then((result) => {
+            go.run(result.instance);
+        });
+    </script>
 </head>
 
 <body>

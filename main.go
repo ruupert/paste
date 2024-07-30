@@ -12,7 +12,6 @@ import (
 	"html"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
@@ -31,19 +30,20 @@ type BodyData struct {
 }
 
 var (
-	db               pastedb.DatabaseInterface
-	goPastePort      int
-	goPasteAddr      string
-	goPasteTlsCrt    string
-	goPasteTlsKey    string
-	goPasteDb        string
-	goPaste404Dir    string
+	db            pastedb.DatabaseInterface
+	goPastePort   int
+	goPasteAddr   string
+	goPasteTlsCrt string
+	goPasteTlsKey string
+	goPasteDb     string
+	//goPaste404Dir    string
 	goPastePyroscope string
 )
 
-//go:embed public/out.wasm
-//go:embed public/script/wasm_exec.js
-//go:embed public/css/paste.css
+//go:embed assets/out.wasm
+//go:embed assets/script/wasm_exec.js
+//go:embed assets/css/paste.css
+//go:embed assets/404/404_1.png
 var embedded embed.FS
 
 func init() {
@@ -52,7 +52,7 @@ func init() {
 	flag.StringVar(&goPasteTlsCrt, "cert", "tls.pem", "Cert")
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
 	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
-	flag.StringVar(&goPaste404Dir, "404", "./public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
+	//flag.StringVar(&goPaste404Dir, "404", "./assets/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
 	flag.StringVar(&goPastePyroscope, "pyroscope", "", "Pyroscope ServerAddress")
 	flag.Parse()
 }
@@ -107,33 +107,24 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		getIndexHandler(w)
 		return
 	}
-	if r.URL.Path == "/wf" {
-		wd, err := os.Getwd()
-		if err != nil {
-			log.Fatal(err)
-		}
-		w.Header().Set("Cache-Control", "no-cache")
-		pagedata := BodyData{Value: ""}
-		tmpl := template.Must(template.ParseFiles(wd + "/templates/wlayout.html"))
-		err = tmpl.Execute(w, pagedata)
-		if err != nil {
-			fmt.Println(err)
-		}
-		return
-	}
 	if r.URL.Path == "/wasssm" {
 		w.Header().Set("Content-Type", "application/wasm")
-		http.ServeFileFS(w, r, embedded, "public/out.wasm")
+		http.ServeFileFS(w, r, embedded, "assets/out.wasm")
 		return
 	}
 	if r.URL.Path == "/css" {
 		w.Header().Set("Content-Type", "text/css")
-		http.ServeFileFS(w, r, embedded, "public/css/paste.css")
+		http.ServeFileFS(w, r, embedded, "assets/css/paste.css")
 		return
 	}
 	if r.URL.Path == "/wasmexec" {
 		w.Header().Set("Content-Type", "application/javascript")
-		http.ServeFileFS(w, r, embedded, "public/script/wasm_exec.js")
+		http.ServeFileFS(w, r, embedded, "assets/script/wasm_exec.js")
+		return
+	}
+	if r.URL.Path == "/404" {
+		w.Header().Set("Content-Type", "image/png")
+		http.ServeFileFS(w, r, embedded, "assets/script/wasm_exec.js")
 		return
 	}
 	req, found := strings.CutPrefix(r.URL.Path, "/")
@@ -167,22 +158,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func notFoundHandler(w http.ResponseWriter) {
-	// read these later once at init
-	files, err := os.ReadDir(goPaste404Dir)
-	if err != nil {
-		fmt.Println(err)
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"} // #nosec G404
-	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-	err = tmpl.Execute(w, pagedata)
-	if err != nil {
-		fmt.Println(err)
-	}
+	http.Error(w, "Not found", http.StatusNotFound)
 }
 
 func getIndexHandler(w http.ResponseWriter) {
@@ -191,7 +167,7 @@ func getIndexHandler(w http.ResponseWriter) {
 		log.Fatal(err)
 	}
 	w.Header().Set("Cache-Control", "no-cache")
-	pagedata := BodyData{Value: "<textarea class='prettyprint' id='paste' placeholder='[ paste text  -  ctrl+s to save ]' spellcheck='false'></textarea>"}
+	pagedata := BodyData{Value: ""}
 	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
 	err = tmpl.Execute(w, pagedata)
 	if err != nil {
@@ -257,7 +233,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
-	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./public"))))
 	d, err := pastedb.NewDatabaseType(pastedb.DatabaseType(getDBType(goPasteDb)))
 	if err != nil {
 		log.Fatal(err)
