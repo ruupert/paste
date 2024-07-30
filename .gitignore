@@ -1,7 +1,7 @@
 tls.*
 *.pem
 bolt.db
-backend/paste
+./paste
 *.wasm
 tmp
 .vscode

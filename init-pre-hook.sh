@@ -17,7 +17,7 @@ echo "install gosec into PATHs"
 exit 0
 fi
 pre_script="#!/usr/bin/env bash
-echo 'OSV Sanner:' && $osv_scanner . && echo 'golangci:' && cd ./backend && $golangci_lint run . 
+echo 'OSV Sanner:' && $osv_scanner . && echo 'golangci:' && $golangci_lint run . && echo 'Gosec:' && $gosec_bin -r
 exit \$?"
 echo "$pre_script" > "$hook_dir/$hook_name"
 chmod u+x "$hook_dir/$hook_name"
