@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>wpastebin</title>
+    <meta charset="utf-8"/>
+    <script src="/wasmexec"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("/wasssm"), go.importObject).then((result) => {
+            go.run(result.instance);
+        });
+    </script>
+</head>
+<body>
+        {{ .Value }}
+</body>
+</html>

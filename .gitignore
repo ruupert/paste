@@ -2,3 +2,6 @@ tls.*
 *.pem
 bolt.db
 paste
+*.wasm
+tmp
+.vscode

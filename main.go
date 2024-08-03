@@ -1,22 +1,23 @@
+//go:build !wasm
+// +build !wasm
+
 package main
 
+//go:generate ./generators/front.sh
 import (
 	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
-	"html"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"runtime"
-	"strings"
 	"text/template"
 	"time"
 
-	"github.com/grafana/pyroscope-go"
+	"embed"
+
 	pastedb "github.com/ruupert/paste/db"
 )
 
@@ -24,16 +25,24 @@ type BodyData struct {
 	Value string
 }
 
-var db pastedb.DatabaseInterface
 var (
-	goPastePort      int
-	goPasteAddr      string
-	goPasteTlsCrt    string
-	goPasteTlsKey    string
-	goPasteDb        string
-	goPaste404Dir    string
-	goPastePyroscope string
+	db                    pastedb.DatabaseInterface
+	goPastePort           int
+	goPasteAddr           string
+	goPasteTlsCrt         string
+	goPasteTlsKey         string
+	goPasteDb             string
+	goPastePyroscope      string
+	goPastePyroscopePort  string
+	goPastePyroscopeProto string
 )
+
+//go:embed assets/out.wasm
+//go:embed assets/script/wasm_exec.js
+//go:embed assets/css/paste.css
+//go:embed assets/404/404_1.png
+//go:embed assets/templates/layout.html
+var embedded embed.FS
 
 func init() {
 	flag.IntVar(&goPastePort, "port", 8432, "Listen port")
@@ -41,17 +50,19 @@ func init() {
 	flag.StringVar(&goPasteTlsCrt, "cert", "tls.pem", "Cert")
 	flag.StringVar(&goPasteTlsKey, "key", "tls.key", "Cert Key")
 	flag.StringVar(&goPasteDb, "db", "bolt", "backend options: [bolt, memory]")
-	flag.StringVar(&goPaste404Dir, "404", "./public/404", "Path to dir with 404 png/gif/jpg") // later, just default for now
 	flag.StringVar(&goPastePyroscope, "pyroscope", "", "Pyroscope ServerAddress")
+	flag.StringVar(&goPastePyroscopePort, "pyroscope port", "4040", "Pyroscope port")
+	flag.StringVar(&goPastePyroscopeProto, "pyroscope proto", "http", "Pyroscope proto")
 	flag.Parse()
 }
 
 func requestHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Connection", "close")
 	switch r.Method {
 	case "POST":
+		fmt.Println("Post")
 		postHandler(w, r)
 	case "GET":
-		w.Header().Set("Connection", "close")
 		getHandler(w, r)
 	default:
 		http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
@@ -69,83 +80,82 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	http.Redirect(w, r, "/"+string(p.Hash), http.StatusFound)
-}
-
-func textOnly(a string) bool {
-	s := strings.ToLower(a)
-	r := []string{"curl", "wget", "fetch"}
-	for _, v := range r {
-		if strings.Contains(s, v) {
-			return true
-		}
+	w.Header().Add("Location", "/"+string(p.Hash))
+	w.WriteHeader(http.StatusCreated)
+	_, err = w.Write([]byte("ok"))
+	if err != nil {
+		fmt.Println(err)
 	}
-	return false
 }
 
 func getHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/" {
-		getIndexHandler(w)
-		return
-	}
-	req, found := strings.CutPrefix(r.URL.Path, "/")
-	if !found {
-		notFoundHandler(w)
-		return
-	}
-	res, err := db.Get([]byte(req))
-	if err != nil {
-		notFoundHandler(w)
-		return
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if textOnly(r.UserAgent()) {
-		_, err = w.Write(res)
-		if err != nil {
-			fmt.Println(err)
+	switch r.URL.Path {
+	case "/pyroscope":
+		if goPastePyroscope != "" {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(fmt.Sprintf("%s://%s:%s", goPastePyroscopeProto, goPastePyroscope, goPastePyroscopePort)))
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		} else {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusAccepted)
+			_, err := w.Write([]byte(""))
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
 		}
-	} else {
-		w.Header().Set("Cache-Control", "no-cache")
-		pagedata := BodyData{Value: "<pre><code>" + html.EscapeString(string(res)) + "</code></pre>"}
-		tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-		err = tmpl.Execute(w, pagedata)
-		if err != nil {
-			fmt.Println(err)
+	case "/wasssm":
+		w.Header().Set("Content-Type", "application/wasm")
+		http.ServeFileFS(w, r, embedded, "assets/out.wasm")
+	case "/css":
+		w.Header().Set("Content-Type", "text/css")
+		http.ServeFileFS(w, r, embedded, "assets/css/paste.css")
+		return
+	case "/wasmexec":
+		w.Header().Set("Content-Type", "application/javascript")
+		http.ServeFileFS(w, r, embedded, "assets/script/wasm_exec.js")
+		return
+	case "/404":
+		w.Header().Set("Content-Type", "image/png")
+		http.ServeFileFS(w, r, embedded, "assets/404/404_1.png")
+		return
+	default:
+		uvals := r.URL.Query()
+		if uvals.Has("q") {
+			q := uvals.Get("q")
+			res, err := db.Get([]byte(q))
+			if err != nil {
+				fmt.Println("err get")
+				notFoundHandler(w)
+				return
+			}
+			fmt.Println(res)
+			_, err = w.Write(res)
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		} else {
+			getIndexHandler(w)
+			return
 		}
 	}
 }
 
 func notFoundHandler(w http.ResponseWriter) {
-	// read these later once at init
-	files, err := os.ReadDir(goPaste404Dir)
-	if err != nil {
-		fmt.Println(err)
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	w.Header().Set("Cache-Control", "no-cache")
-	pagedata := BodyData{Value: "<div id='float404'><img src='/public/404/" + files[rand.Intn(len(files))].Name() + "'/></div>"} // #nosec G404
-	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-	err = tmpl.Execute(w, pagedata)
-	if err != nil {
-		fmt.Println(err)
-	}
+	http.Error(w, "", http.StatusNotFound)
 }
 
 func getIndexHandler(w http.ResponseWriter) {
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	w.Header().Set("Cache-Control", "no-cache")
-	pagedata := BodyData{Value: "<textarea class='prettyprint' id='paste' placeholder='[ paste text  -  ctrl+s to save ]' spellcheck='false'></textarea>"}
-	tmpl := template.Must(template.ParseFiles(wd + "/templates/layout.html"))
-	err = tmpl.Execute(w, pagedata)
+	pagedata := BodyData{Value: ""}
+	tmpl := template.Must(template.ParseFS(embedded, "assets/templates/layout.html"))
+	err := tmpl.Execute(w, pagedata)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -178,38 +188,40 @@ func getDBType(s string) int {
 	}
 }
 
-func initPyroscope(addr string) {
-	runtime.SetMutexProfileFraction(5)
-	runtime.SetBlockProfileRate(5)
-	_, err := pyroscope.Start(pyroscope.Config{
-		ApplicationName: "github.com.ruupert.paste",
-		ServerAddress:   addr,
-		Logger:          pyroscope.StandardLogger,
-		ProfileTypes: []pyroscope.ProfileType{
-			pyroscope.ProfileCPU,
-			pyroscope.ProfileAllocObjects,
-			pyroscope.ProfileAllocSpace,
-			pyroscope.ProfileInuseObjects,
-			pyroscope.ProfileInuseSpace,
-			pyroscope.ProfileGoroutines,
-			pyroscope.ProfileMutexCount,
-			pyroscope.ProfileMutexDuration,
-			pyroscope.ProfileBlockCount,
-			pyroscope.ProfileBlockDuration,
-		},
-	})
-	if err != nil {
-		log.Fatal(err)
+/*
+	func initPyroscope(addr string, proto string, port string) {
+		runtime.SetMutexProfileFraction(5)
+		runtime.SetBlockProfileRate(5)
+		_, err := pyroscope.Start(pyroscope.Config{
+			ApplicationName: "github.com.ruupert.paste.backend",
+			ServerAddress:   fmt.Sprintf("%s://%s:%s", proto, addr, port),
+			Logger:          nil, // pyroscope.StandardLogger,
+			ProfileTypes: []pyroscope.ProfileType{
+				pyroscope.ProfileCPU,
+				pyroscope.ProfileAllocObjects,
+				pyroscope.ProfileAllocSpace,
+				pyroscope.ProfileInuseObjects,
+				pyroscope.ProfileInuseSpace,
+				pyroscope.ProfileGoroutines,
+				pyroscope.ProfileMutexCount,
+				pyroscope.ProfileMutexDuration,
+				pyroscope.ProfileBlockCount,
+				pyroscope.ProfileBlockDuration,
+			},
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-}
-
+*/
 func main() {
-	if goPastePyroscope != "" {
-		initPyroscope(goPastePyroscope)
-	}
+	/*if goPastePyroscope != "" {
+		initPyroscope(goPastePyroscopeProto, goPastePyroscope, goPastePyroscopePort)
+	}*/
+
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(requestHandler))
-	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./public"))))
 	d, err := pastedb.NewDatabaseType(pastedb.DatabaseType(getDBType(goPasteDb)))
 	if err != nil {
 		log.Fatal(err)
