@@ -3,9 +3,9 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = []
+  args_bin = [] # ["-pyroscope", "$PYROSCOPE_URL"]
   bin = "./tmp/main"
-  cmd = "go generate . && go build -o ./tmp/main ."
+  cmd = "go mod vendor && go generate . && go build -o ./tmp/main ."
   delay = 1000
   exclude_dir = ["tmp", "vendor", "testdata"]
   exclude_file = []
