@@ -60,7 +60,6 @@ func requestHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "close")
 	switch r.Method {
 	case "POST":
-		fmt.Println("Post")
 		postHandler(w, r)
 	case "GET":
 		getHandler(w, r)
@@ -80,6 +79,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("Post /" + string(p.Hash))
 	w.Header().Add("Location", "/"+string(p.Hash))
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte("ok"))
@@ -94,7 +94,7 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 		if goPastePyroscope != "" {
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write([]byte(fmt.Sprintf("%s://%s:%s", goPastePyroscopeProto, goPastePyroscope, goPastePyroscopePort)))
+			_, err := fmt.Fprintf(w, "%s://%s:%s", goPastePyroscopeProto, goPastePyroscope, goPastePyroscopePort)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -133,7 +133,6 @@ func getHandler(w http.ResponseWriter, r *http.Request) {
 				notFoundHandler(w)
 				return
 			}
-			fmt.Println(res)
 			_, err = w.Write(res)
 			if err != nil {
 				fmt.Println(err)
@@ -162,8 +161,8 @@ func getIndexHandler(w http.ResponseWriter) {
 }
 
 func certsExist() bool {
-	var cert bool = true
-	var key bool = true
+	var cert = true
+	var key = true
 	if _, err := os.Stat(goPasteTlsCrt); errors.Is(err, os.ErrNotExist) {
 		cert = false
 	}
