@@ -1,7 +1,8 @@
 tls.*
 *.pem
-bolt.db
-paste
+/bolt.db
+/paste
 *.wasm
-tmp
-.vscode
+/tmp
+/.vscode
+/dist
