@@ -1,11 +1,11 @@
 //go:build !wasm
-// +build !wasm
 
 package main
 
 //go:generate ./generators/front.sh
 import (
 	"crypto/tls"
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,8 +15,7 @@ import (
 	"os"
 	"text/template"
 	"time"
-
-	"embed"
+	"unicode/utf8"
 
 	pastedb "github.com/ruupert/paste/db"
 )
@@ -74,17 +73,21 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error", http.StatusInternalServerError)
 	}
 	var p pastedb.PasteRecord
-	p.New(body)
-	_, err = db.Put(p)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("Post /" + string(p.Hash))
-	w.Header().Add("Location", "/"+string(p.Hash))
-	w.WriteHeader(http.StatusCreated)
-	_, err = w.Write([]byte("ok"))
-	if err != nil {
-		fmt.Println(err)
+	if utf8.Valid(body) {
+		p.New(body)
+		_, err = db.Put(p)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println("Post /" + string(p.Hash))
+		w.Header().Add("Location", "/"+string(p.Hash))
+		w.WriteHeader(http.StatusCreated)
+		_, err = w.Write([]byte("ok"))
+		if err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		http.Error(w, "Invalid request", http.StatusMethodNotAllowed)
 	}
 }
 
