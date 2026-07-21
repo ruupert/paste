@@ -6,7 +6,6 @@ package main
 import (
 	"crypto/tls"
 	"embed"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -68,9 +67,11 @@ func requestHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error", http.StatusInternalServerError)
+		http.Error(w, "Error", http.StatusBadRequest)
+		return
 	}
 	var p pastedb.PasteRecord
 	if utf8.Valid(body) {
@@ -164,19 +165,9 @@ func getIndexHandler(w http.ResponseWriter) {
 }
 
 func certsExist() bool {
-	var cert = true
-	var key = true
-	if _, err := os.Stat(goPasteTlsCrt); errors.Is(err, os.ErrNotExist) {
-		cert = false
-	}
-	if _, err := os.Stat(goPasteTlsKey); errors.Is(err, os.ErrNotExist) {
-		key = false
-	}
-	if key && cert {
-		return true
-	} else {
-		return false
-	}
+	_, errCert := os.Stat(goPasteTlsCrt)
+	_, errKey := os.Stat(goPasteTlsKey)
+	return errCert == nil && errKey == nil
 }
 
 func getDBType(s string) int {
@@ -236,7 +227,6 @@ func main() {
 			PreferServerCipherSuites: true,
 			CipherSuites: []uint16{
 				tls.TLS_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_CHACHA20_POLY1305_SHA256,
 			},
 		}

@@ -44,7 +44,7 @@ func (b *BoltDatabase) Get(h []byte) ([]byte, error) {
 	err := b.conn.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("paste"))
 		v := b.Get(h)
-		res = v
+		res = bytes.Clone(v)
 		return nil
 	})
 	if err != nil {
@@ -80,6 +80,8 @@ type MemoryDatabase struct {
 }
 
 func (b *MemoryDatabase) Get(h []byte) ([]byte, error) {
+	b.RLock()
+	defer b.RUnlock()
 	if len(b.Pastes) == 0 {
 		return []byte(""), ErrHashNotFound
 	}
